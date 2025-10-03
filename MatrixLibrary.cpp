@@ -8,7 +8,8 @@ class Matrix {
     private : 
     size_t rows,cols;
     T* vector ;
-    /////////////////////////////////////////////////////////////////////////Helper functions 
+    T zero = 1e-12; // tolerance
+    /////////////////////////////////////////////////////////////////////////Helper functions  /////////////////////////////////
     template<size_t M,size_t N>
     void copyData(const T (&src)[M][N]){                 //data copy
         for(size_t i = 0; i < rows;i++){
@@ -18,6 +19,7 @@ class Matrix {
         }
     }
     
+    ////////////////////////// helpers of detrminant function
     friend  Matrix minorMatrix(const Matrix& A , size_t r , size_t c){   //minor matrix
         Matrix minA;
         minA.rows = A.rows - 1;  minA.cols = A.cols - 1;
@@ -40,7 +42,7 @@ class Matrix {
         COF.vector = new T[COF.rows*COF.cols];
         for(size_t i = 0; i < COF.rows ; i++ ){
             for(size_t j = 0; j < COF.cols ; j++){
-                COF.vector[i*COF.cols + j] = pow(-1,i+j)*det(minorMatrix(matrix,i,j)); 
+                COF.vector[i*COF.cols + j] = pow(-1,i+j)*DET(minorMatrix(matrix,i,j)); 
             }
         }
         return COF;
@@ -48,11 +50,42 @@ class Matrix {
     
     friend Matrix adjI(const Matrix& matrix){              //adjoint function just for computing inverse
         // assuming this is an n*n matrix that is not null
-        Matrix ADJ = tr(cofI(matrix));
+        Matrix ADJ = TR(cofI(matrix));
         return ADJ;
         
     }
-    
+    //////////////////// helpers of inverse funtion
+    friend Matrix augmentedH(const Matrix& M){         // rrefAUG = [ A | I ]
+        //creating augmented matrix for inverse computation only
+        
+        //create identity matrix compatible with the sqaure matrix M
+        Matrix Identity(M.rows,M.cols);   for( size_t i = 0; i < Identity.rows ; i++ ) { Identity.vector[i*Identity.cols + i] = 1;}
+        Matrix AUG; AUG.rows = M.rows; AUG.cols = 2*M.cols; AUG.vector = new T[AUG.rows*AUG.cols];
+        
+        for(size_t i = 0; i < AUG.rows ; i++ ){
+            for(size_t j = 0; j < AUG.cols ; j++){
+                if(j < M.cols){   //means we are in the matrix M
+                    AUG.vector[i*AUG.cols+j] =  M.vector[i*M.cols+j] ;
+                } else if(j > M.cols - 1){ // means we are in the identity matrix
+                    AUG.vector[i*AUG.cols+j] =  Identity.vector[i*Identity.cols+j - M.cols] ; // becuse the column index of the identity elements in the AUG matrix are the indices of the indentity matrix shifted to the right by the number of M's columns
+                }
+            }
+        }
+        
+        return AUG;
+    }
+    friend Matrix extractInvH(const Matrix& rrefAUG){    // rrefAUG = [I | A^-1]
+        //creating augmented matrix for inverse computation only
+        Matrix inverse; inverse.rows = rrefAUG.rows ; inverse.cols = (rrefAUG.cols)/2;
+        inverse.vector = new T[inverse.rows*inverse.cols];
+        
+        for(size_t i = 0; i < inverse.rows; i++){
+            for(size_t j = 0 ; j < inverse.cols ; j++){    // start form the columns of AUG that contain the inverse 
+                inverse.vector[ i*inverse.cols  + j] = rrefAUG.vector[ i*rrefAUG.cols +(j + (rrefAUG.cols)/2)]; // the elements of th inverse in the AUG marix are shifted by the number of cols of the actual inverse we are filling by 1/2 the cols of AUG
+            }
+        }
+        return inverse;
+    }
     
     /////////////// ELEMENTARY ROW OPERATIONS HELPER FUNCTIONS + thier respective elementary matrices
     friend Matrix rSwapH(const Matrix& matrix, size_t r1 , size_t r2  ){ // no need to check if i,j are inbound or if matrix is null
@@ -147,7 +180,7 @@ class Matrix {
                 delete[] vector;
                 vector = nullptr; cols = 0; rows = 0;
                 
-            } else {
+            } else {  
                 delete[] vector;    //we could be deleting a null ptr here
                 cols = other_matrix.cols; rows = other_matrix.rows; 
                 vector = new T[rows*cols];
@@ -155,7 +188,7 @@ class Matrix {
                     vector[i]  = other_matrix.vector[i];
                 }
             }  
-        } 
+        } // else is the left and right operand are the same , then (A = B) returns A
         return *this;
     }
     
@@ -163,7 +196,7 @@ class Matrix {
         delete[] vector;
     }
     
-    ///////////////////////////// operations on matrices ////////////
+    ///////////////////////////// operations on matrices //////////// in all operations, the operands and arguments are never modified, a temporary object is always returned
     
     Matrix operator+(const Matrix& other){                                       //matrix addition
         if((this->vector == nullptr)||(other.vector == nullptr)){
@@ -270,7 +303,7 @@ class Matrix {
         }
     }
     
-    friend Matrix tr(const Matrix& matrix){                                 //matrix transpose
+    friend Matrix TR(const Matrix& matrix){                                 //matrix transpose
         if(matrix.vector == nullptr){
             cout << "Cannot transpose a null matrix" << endl;
             return matrix;
@@ -287,7 +320,7 @@ class Matrix {
         }
     } 
     
-    friend T det(const Matrix& matrix){                 // determinant using laplace expansion
+    friend T DET(const Matrix& matrix){       // determinant using laplace expansion (this shit is TOO slow O(n!) complexity) you must use gaussian elemination instead O(n^3)( idk how yet)
         if(matrix.vector == nullptr){
             cout << "Cannot compute determinant of null matrix " << endl;
             T zero{};
@@ -297,39 +330,41 @@ class Matrix {
             T zero{};
             return  zero;
         } else if(matrix.rows == 2){
-            T DET = matrix.vector[0]*matrix.vector[matrix.cols + 1] - matrix.vector[1]*matrix.vector[matrix.cols];
-            return DET;
+            T det = matrix.vector[0]*matrix.vector[matrix.cols + 1] - matrix.vector[1]*matrix.vector[matrix.cols];
+            return det;
         } else {
-            T DET{};
+            T det{};
             for(size_t j = 0; j < matrix.cols ; j++){   // expanding along the 0th row i = 0
-                DET =  DET + (matrix.vector[j])*pow(-1,j)*det(minorMatrix(matrix,0,j));
+                det =  det + (matrix.vector[j])*pow(-1,j)*DET(minorMatrix(matrix,0,j));
             }
-            return DET; 
+            return det; 
         }
         
     }  
     
-    friend Matrix inv(const Matrix& matrix){           /// matrix  inverse
-        T DET {};
-        if(matrix.vector == nullptr){
-            cout << "Cannot invert a null matrix"<<endl;
-            Matrix nullmatrix;
-            return nullmatrix;
-        } else if (matrix.rows != matrix.cols){
-            cout << "Cannot invert a non-square matrix"<<endl;
-            Matrix nullmatrix;
-            return nullmatrix;
-        } else if (abs(DET = det(matrix)) < 1e-12){       // this may never work with complecx types, you must use rank to determine invertibiblity
-            cout << "det(matrix) = zero, the matrix is not invertible " << endl;
-            Matrix nullmatrix;
-            return nullmatrix;
-        } else {
-            Matrix INV = (adjI(matrix)*(1/DET));
-            return INV;
-        }
-    }
     
-    friend Matrix cof(const Matrix& matrix){         //// cofactor matrix
+    /*friend Matrix inv(const Matrix& matrix){          inverse using determinant adjoint method , and det = 0 invertibility test
+    T DET {};
+    if(matrix.vector == nullptr){
+    cout << "Cannot invert a null matrix"<<endl;
+    Matrix nullmatrix;
+    return nullmatrix;
+    } else if (matrix.rows != matrix.cols){
+    cout << "Cannot invert a non-square matrix"<<endl;
+    Matrix nullmatrix;
+    return nullmatrix;
+    } else if (abs(DET = det(matrix)) < 1e-12){       // this may never work with complecx types, you must use rank to determine invertibiblity
+    cout << "det(matrix) = zero, the matrix is not invertible " << endl;
+    Matrix nullmatrix;
+    return nullmatrix;
+    } else {
+    Matrix INV = (adjI(matrix)*(1/DET));
+    return INV;
+    }
+    }*/
+    
+    
+    friend Matrix COF(const Matrix& matrix){         //// cofactor matrix
         if(matrix.vector == nullptr){ 
             cout << "Cannot compute the cofactor matrix of a null matrix" << endl;
             Matrix nullmatrix;
@@ -339,12 +374,12 @@ class Matrix {
             Matrix nullmatrix;
             return nullmatrix;
         } else {
-            Matrix COF = cofI(matrix);
-            return COF;
+            Matrix cof = cofI(matrix);
+            return cof;
         }
     }
     
-    friend Matrix adj(const Matrix& matrix){                ////// adjoint matrix 
+    friend Matrix ADJ(const Matrix& matrix){                ////// adjoint matrix 
         if(matrix.vector == nullptr){ 
             cout << "Cannot compute the adjoint matrix of a null matrix" << endl;
             Matrix nullmatrix;
@@ -354,51 +389,46 @@ class Matrix {
             Matrix nullmatrix;
             return nullmatrix;
         } else {
-            Matrix ADJ = adjI(matrix);
-            return ADJ;
+            Matrix adj = adjI(matrix);
+            return adj;
         }
     }
     
+    /////////////////////////// elementary column operations //////////////////  must be maid avaible to the user
     
-    
-    
-    /////////////////////////// elementary column operations //////////////////
-    
-    
-    ///1 - elementary column operations, ( you must remove H and make just one version)
+    /*  ///1 - elementary column operations, ( you must remove H and make just one version)
     friend Matrix cSwapH(const Matrix& matrix, size_t c1 , size_t c2  ){ // no need to check if i,j are inbound or if matrix is null
-        Matrix result(matrix);   
-        T temp{};
-        for(size_t k = 0; k < result.cols ; k++){   // [i*result.cols + j] = [i][j]
-            temp =  result.vector[ k*result.cols + c1];
-            result.vector[ k*result.cols + c1] = result.vector[ k*result.cols + c2];
-            result.vector[ k*result.cols + c2] = temp;
-        }
-        return result;
+    Matrix result(matrix);   
+    T temp{};
+    for(size_t k = 0; k < result.cols ; k++){   // [i*result.cols + j] = [i][j]
+    temp =  result.vector[ k*result.cols + c1];
+    result.vector[ k*result.cols + c1] = result.vector[ k*result.cols + c2];
+    result.vector[ k*result.cols + c2] = temp;
+    }
+    return result;
     }
     
     friend Matrix cAddH(const Matrix& matrix, size_t c1 , size_t c2 , T scalar ){ // Cc1 -----> Cc1 + scalar * Cc2
-        Matrix result(matrix);
-        for(size_t k = 0; k < result.cols ; k++){   // [i*result.cols + j] = [i][j]
-            result.vector[k*result.cols + c1] = result.vector[k*result.cols + c1] + scalar*result.vector[ k*result.cols + c2];
-        }
-        return result;
+    Matrix result(matrix);
+    for(size_t k = 0; k < result.cols ; k++){   // [i*result.cols + j] = [i][j]
+    result.vector[k*result.cols + c1] = result.vector[k*result.cols + c1] + scalar*result.vector[ k*result.cols + c2];
+    }
+    return result;
     }
     
     friend Matrix cScaleH(const Matrix& matrix, size_t c , T scalar ){ // Cc -----> scalar * Cc
-        Matrix result(matrix);
-        for(size_t k = 0; k < result.cols ; k++){   // [i*result.cols + j] = [i][j]
-            result.vector[k*result.cols + c] = scalar * result.vector[k*result.cols + c];
-        }
-        return result;
+    Matrix result(matrix);
+    for(size_t k = 0; k < result.cols ; k++){   // [i*result.cols + j] = [i][j]
+    result.vector[k*result.cols + c] = scalar * result.vector[k*result.cols + c];
     }
-    
+    return result;
+    }
+    */
     
     
     /////////////////////////////////////////////////////////////////////////////////////////////// ROW ECHELON FORM
     
-    
-    friend Matrix REF(const Matrix& M){        //non normalized pivots,   // row echelon form
+    friend Matrix REF(const Matrix& M){        //non normalized pivots,   // row echelon form  //testert
         if(M.vector == nullptr) {
             cout << "Cannot find row echelon form of a null matrix " << endl;
             Matrix nullmatrix;
@@ -409,7 +439,7 @@ class Matrix {
             /* here we always take the pivot to be the first non zero entry in the column just for simplification purposes*/ 
             
             Matrix RE(M);      size_t m = RE.rows ; size_t n = RE.cols;   
-            /*  ----- -> */  T zero = 1e-12;
+            T zero = 1e-12; // the tolerance
             size_t cR = 0 , cC = 0;  //start at the top left corner
             size_t pivot = 0;  // row index of the first nonzer entry in a column
             size_t f = 0;   // increments when the FIRST non zero entry in a column is found
@@ -439,17 +469,130 @@ class Matrix {
                     }
                 }
             }
-            
             return RE;
         }
         
-
-        friend Matrix()
+    } 
+    friend Matrix RREF(const Matrix& M){        /// reduced row echelon form
+        if(M.vector == nullptr) {
+            cout << "Cannot find row echelon form of a null matrix " << endl;
+            Matrix nullmatrix;
+            return nullmatrix;
+        } else {
+            T zero = 1e-12; // tolerance
+            Matrix RE(REF(M)); //start from ref of the matrix
+            size_t m = RE.rows ; size_t n = RE.cols;
+            //size_t cR = m - 1; //here we dont need cC, it is replaced with i, and we start the operation from the bottom left corner of the matrix
+            size_t f = 0 , pivot = 0; //this is the column index of the pivot found in the current row
+            
+            //N = a - b = (m-1) - (-1) = m times to scan all of the m rows of the matrix
+            
+            for(int cR = m - 1 ; cR > -1 ; cR--  ){ // each time the loop repeates , the algo researches for a pivot in the row above the last one /// this loop will run exactly m times
+                pivot = 0; f = 0; //used to capture the first pivot and say if we found pivot
+                for(size_t j = 0; j < n ; j++){ //search the current row for pivots ( the first 1 in this row) travel form left to right
+                    if((abs( 1 - RE.vector[cR*n+j] ) < zero)&&(f < 1)){  
+                        f = 1;
+                        pivot = j; // located at column j
+                    }  
+                }     // analyse search results 
+                if(f == 1){ // found a pivot
+                    // eliminating above the pivot 
+                    
+                    // N = a - b  + 1 = (cR - 1) -(0) + 1 = cR times to clear all entries above the pivot
+                    //we clear entries starting form the one above the current row, and end at the oth row
+                    for(int  i = cR -1 ; i >= 0 ; i-- ) {   // when we reach i = 0 we dont execute, because there is nothing to eleminate, we start above the pivot , i is the index of the row we are eleminating in
+                        RE = rAddH(RE,i,cR,-RE.vector[ i*n+ pivot]);  // eleminate even the last row  ( i> =0) but cant use size_t here
+                    } 
+                } else {   // if no pivots found 
+                    // search in the upper row
+                }
+            }
+            return RE;
+        }
     }
+    
+    friend size_t RANK(const Matrix& M){ 
+        if(M.vector == nullptr) {
+            cout << "Cannot find row echelon form of a null matrix " << endl;
+            return 0;
+        } else {
+            T zero = 1e-12; // tolerance
+            Matrix RE(REF(M)); //start from ref of the matrix
+            size_t m = RE.rows ; size_t n = RE.cols;
+            //size_t cR = m - 1; //here we dont need cC, it is replaced with i, and we start the operation from the bottom left corner of the matrix
+            size_t f = 0 , pivot = 0; //this is the column index of the pivot found in the current row
+            
+            size_t pivotRows = 0;  //help calculate rank for the next function
+            // cR > 0 because we must eleminate above all the pivot rows exept the topmost one
+            
+            for(int cR = m - 1 ; cR > -1 ; cR--  ){ // each time the loop repeates , the algo researches for a pivot in the row above the last one /// this loop will run exactly m times
+                pivot = 0; f = 0; //used to capture the first pivot and say if we found pivot
+                for(size_t j = 0; j < n ; j++){ //search the current row for pivots ( the first 1 in this row) travel form left to right
+                    if((abs( 1 - RE.vector[cR*n+j] ) < zero)&&(f < 1)){  
+                        f = 1;
+                        pivot = j; // located at column j
+                        
+                    }  
+                }     // analyse search results 
+                if(f == 1){ // found a pivot
+                    // eliminating above the pivot 
+                    for(int  i = cR -1 ; i >= 0 ; i-- ) {   // when we reach i = 0 we dont execute, because there is nothing to eleminate, we start above the pivot , i is the index of the row we are eleminating in
+                        RE = rAddH(RE,i,cR,-RE.vector[ i*n+ pivot]);  // eleminate even the last row  ( i> =0) but cant use size_t here
+                    } 
+                    pivotRows++;
+                    
+                } else {   // if no pivots found 
+                    // search in the upper row
+                }
+            }
+            return pivotRows;  // return number of pivot rows found which is the number of nonzero rows , hence the rank
+        }
+    }
+    
+    friend size_t NULLITY(const Matrix& M){ 
+        if(M.vector == nullptr) {
+            cout << "Cannot find nullity of a null matrix " << endl;
+            return 0;
+        } else {
+            size_t nullity = M.cols - RANK(M);
+            return nullity;
+            //rank nullity theorem  n = rank + nullity
+        }
+    }
+    
+    friend Matrix INV(const Matrix& matrix){           /// matrix  inverse ( too slow too, you have to use guassian elemination to check invertibility and return the inverse, do not use determinants alltogether IF RANK IS FULL THEN IT IS INVERTIBLE, dont have to use if (RREF(A) == Identity matrix)
+        if(matrix.vector == nullptr){
+            cout << "Cannot invert a null matrix"<<endl;
+            Matrix nullmatrix;
+            return nullmatrix;
+        } else if (matrix.rows != matrix.cols){
+            cout << "Cannot invert a non-square matrix"<<endl;
+            Matrix nullmatrix;
+            return nullmatrix;
+        } else if (RANK(matrix) != matrix.cols){       // this may never work with complex types, you must use rank to determine invertibiblity
+            cout << "The matrix is not full rank , hence not invertible " << endl;
+            Matrix nullmatrix;
+            return nullmatrix;
+        } else {
+            size_t m = matrix.rows ; size_t n = matrix.cols;
+            Matrix inverse(n,n);
+            //create an augmented matrix
+            Matrix AUG = augmentedH(matrix);
+            //get rref of aug
+            AUG = RREF(AUG);
+            //extract the inverse
+            inverse = extractInvH(AUG);
+            return inverse;
+        }
+    }
+    
+    //the problem was a pivot ,"1" sometimes isnt exactry 1 even though it was printed as 1, because 62.02565 - 61.02565 doesnt always yield the exact 1 but 0.999999999--->19 zeroes
+    
+    
     /////////////////////////////////////////////// setters and getters //////////////////////////////
     template<size_t M,size_t N>
     void fillMatrixA(const T (&arr)[M][N]){               //setter using array 
-        if(vector == nullptr){
+        if(vector == nullptr){  //create memory to the matrix
             rows = M; cols = N;
             vector = new T[rows*cols];
             copyData(arr);
@@ -491,7 +634,17 @@ class Matrix {
             }
         }
     }
-    
+    template<typename Functype>   //this is so cool, becuase (int)func_a(int,int) and (void) func_b(double) and any other combination is a certain datatype the compiler decides automatically with auto or in this case the typename 
+    void fillMatrixF(Functype customFiller){ //any callable works , but when declaing the function you must write Matrix<type>* in the argument list
+        if(vector == nullptr){
+            cout << "cannot fill a null matrix" << endl;
+        } else {
+            customFiller(this); //to fill the matrix , the custom handler must use setElement ,and getElement, and rowNbr , and colNbr
+        }
+        
+        
+        
+    }
     T getElement (size_t r,size_t c) const{                //////// getter function ( get individual elements)
         if(vector == nullptr){
             cout << "This is a NULL Matrix" << endl ;
@@ -514,6 +667,16 @@ class Matrix {
             cout << "Choose a valid index for the elements of this matrix" <<endl;
         }
     }
+    
+    size_t rowNbr(){        //get number of rows
+        return rows;    
+    }
+    size_t colNbr(){        //get number of columns
+        return cols;
+    }
+    /*T* getVector(){         //this shit is dangarous, only if you know what you are doing 
+        return this->vector;
+    }*/
     /// //////////////////////////////////////////////diplayers ////////////////////////////////////
     
     void  printMatrix(size_t fieldlen = 3,size_t precision = 3) const {    //number of  total digits of each number
@@ -538,69 +701,33 @@ class Matrix {
     
 };
 
+
 int main(){
-    long double CrazyMatrix[20][11] = {
-        {  1.223, -3.445,  2.118, -0.9912,  4.331, -2.771,  0.6732,  1.889, -2.114,  3.221, -0.5567 },
-        { -2.781,  4.112, -1.008,  0.6621, -3.771,  2.119, -0.9876,  1.332, -2.445,  0.8732,  3.221 },
-        {  3.998, -1.223,  0.4432, -2.118,  1.887, -0.6611,  4.555, -3.009,  1.672, -0.2299,  2.445 },
-        { -0.7782,  1.332, -3.889,  4.111, -2.441,  0.5561, -1.223,  3.887, -0.6644,  2.998, -4.222 },
-        {  2.771, -0.9932,  1.221, -4.332,  3.876, -2.118,  0.7781, -1.887,  4.119, -3.442,  1.003 },
-        { -3.009,  2.665, -0.4412,  1.765, -2.333,  4.221, -0.7789,  3.001, -1.442,  0.6711, -2.871 },
-        {  1.111, -2.876,  3.998, -1.442,  2.889, -0.5567,  4.332, -2.761,  0.8733, -3.221,  1.229 },
-        { -4.112,  3.777, -2.991,  0.6611, -1.887,  4.009, -3.221,  1.776, -0.5543,  2.998, -0.9987 },
-        {  0.6621, -1.223,  2.887, -3.111,  4.665, -2.888,  0.4422, -1.998,  3.333, -0.7781,  1.119 },
-        { -2.665,  0.9981, -1.887,  4.441, -3.118,  0.5569, -2.771,  1.223, -4.112,  3.876, -0.2298 },
-        {  3.765, -2.441,  0.8897, -1.223,  2.661, -3.777,  4.119, -0.6623,  1.445, -2.111,  0.7781 },
-        { -0.8899,  1.119, -2.761,  3.221, -0.4456,  4.321, -3.222,  0.9981, -1.777,  2.887, -0.6621 },
-        {  2.445, -3.221,  1.003, -0.7783,  4.119, -2.118,  0.6621, -1.998,  3.887, -0.2291,  1.772 },
-        { -1.776,  0.5543, -3.887,  2.221, -0.6622,  1.442, -4.443,  3.111, -0.7789,  2.998, -1.009 },
-        {  4.221, -2.111,  0.5567, -1.221,  3.887, -0.9932,  2.331, -4.001,  1.772, -0.6642,  3.118 },
-        { -3.009,  1.998, -0.7781,  2.665, -4.441,  3.223, -1.118,  0.6623, -2.771,  1.889, -0.2294 },
-        {  0.6622, -1.332,  2.887, -3.998,  4.119, -2.765,  1.223, -0.8891,  3.221, -1.776,  0.5543 },
-        { -2.118,  3.765, -1.223,  0.7781, -3.887,  2.998, -0.6624,  1.119, -4.111,  3.887, -0.2291 },
-        {  1.333, -0.7782,  4.119, -2.221,  0.6621, -1.118,  3.887, -0.4453,  2.665, -3.009,  1.776 },
-        { -4.119,  2.887, -0.6611,  3.223, -1.009,  0.7784, -2.998,  4.221, -1.333,  0.6621, -3.887 }
-    };
     
-    long double StressTestMatrix[15][15] = {
-        { 1.0, 0.5, 0.3333333333333333, 0.25, 0.2, 0.16666666666666666, 0.14285714285714285, 0.125, 0.1111111111111111, 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667 },
-        { 0.5, 0.3333333333333333, 0.25, 0.2, 0.16666666666666666, 0.14285714285714285, 0.125, 0.1111111111111111, 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625 },
-        { 0.3333333333333333, 0.25, 0.2, 0.16666666666666666, 0.14285714285714285, 0.125, 0.1111111111111111, 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705 },
-        { 0.25, 0.2, 0.16666666666666666, 0.14285714285714285, 0.125, 0.1111111111111111, 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555 },
-        { 0.2, 0.16666666666666666, 0.14285714285714285, 0.125, 0.1111111111111111, 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842 },
-        { 0.16666666666666666, 0.14285714285714285, 0.125, 0.1111111111111111, 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05 },
-        { 0.14285714285714285, 0.125, 0.1111111111111111, 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05, 0.047619047619047616 },
-        { 0.125, 0.1111111111111111, 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05, 0.047619047619047616, 0.045454545454545456 },
-        { 0.1111111111111111, 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05, 0.047619047619047616, 0.045454545454545456, 0.043478260869565216 },
-        { 0.1, 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05, 0.047619047619047616, 0.045454545454545456, 0.043478260869565216, 0.041666666666666664 },
-        { 0.09090909090909091, 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05, 0.047619047619047616, 0.045454545454545456, 0.043478260869565216, 0.041666666666666664, 0.04 },
-        { 0.08333333333333333, 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05, 0.047619047619047616, 0.045454545454545456, 0.043478260869565216, 0.041666666666666664, 0.04, 0.038461538461538464 },
-        { 0.07692307692307693, 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05, 0.047619047619047616, 0.045454545454545456, 0.043478260869565216, 0.041666666666666664, 0.04, 0.038461538461538464, 0.037037037037037035 },
-        { 0.07142857142857142, 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05, 0.047619047619047616, 0.045454545454545456, 0.043478260869565216, 0.041666666666666664, 0.04, 0.038461538461538464, 0.037037037037037035, 0.03571428571428571 },
-        { 0.06666666666666667, 0.0625, 0.058823529411764705, 0.05555555555555555, 0.05263157894736842, 0.05, 0.047619047619047616, 0.045454545454545456, 0.043478260869565216, 0.041666666666666664, 0.04, 0.038461538461538464, 0.037037037037037035, 0.03571428571428571, 0.034482758620689655 }
-    };
+    /*
+    template<typename Functype>   
+    void fillMatrixF(Functype customFiller){ 
+    if(vector == nullptr){
+    cout << "cannot fill a null matrix" << endl;
+    } else {
+    customHandler(this); 
+    }
+    */
+    Matrix<int> A(3,3);
+    A.fillMatrixF([](Matrix<int>* M ){
+        size_t m = M->rowNbr(); size_t n = M->colNbr(); // try to get rid of it by passing them in the fill matrixF definition, this is highly unstable, you best bet is friend functions, (because you will have to write too many arguments for matrix*, vector, row...)
+        for(size_t i = 0; i < m;i++){
+            for(size_t j = 0; j < n ; j++){
+                M->setElement(i,j,5);
+            }  
+        }
+    });
     
-    
-    // Matrix<long double> A(4,3) ;A.fillMatrixUI();
-    
-    Matrix<long double> A;//A.fillMatrixA(CrazyMatrix); 
-    A.fillMatrixA(StressTestMatrix);
-    
-    A.printMatrix(9,4);
-    cout << endl;
-    // (REF(A)).printMatrix(10,4);
-    //cout << det(REF(A)) << endl;
-    REF(A).printMatrix(3,1);
-    cout << endl;
-    //  cout << det(A);
+    A.printMatrix();
     
     
     
-    
-    
-    
-    
-    return 0;   // row echelon form and rref(A) , rank, nullity , and then systems of linear equations
+    return 0;   // and then systems of linear equations, polynomial class 
 }   
 
 
@@ -610,11 +737,9 @@ int main(){
 
 
 
-//cout << "Enter the matrix A" << endl;
-//A.fillMatrixUI();
 
-
-/*Matrix<double> A(2,3);
+/*//MATRIX-VECTOR MULTIPLICATION
+Matrix<double> A(2,3);
 Matrix<double> x(3,1);
 Matrix<double> b;
 
@@ -628,3 +753,44 @@ x.printMatrix();
 b = A*x;
 cout << "the result Ax = b is :" << endl;
 b.printMatrix();*/
+
+
+//A.fillMatrixA(data_array);
+/*
+cout << "the A is :"<< endl;
+A.printMatrix(2,1);
+
+cout << "the determinant of A is : " << DET(A) << endl;
+cout <<"the rank of A is : " << RANK(A) << endl;
+cout <<"the nullity of A is : " << NULLITY(A) << endl;
+
+cout << "inverse of A is :" << endl;
+INV(A).printMatrix(9,4);
+
+cout << "transpose of A is :" << endl;
+TR(A).printMatrix(9,4);
+
+cout << "the cofactor matrix of A is :"<< endl;
+COF(A).printMatrix(9,4);
+
+cout << "the adjoint matrix of A is :" << endl;
+ADJ(A).printMatrix(9,4);
+
+cout << "row echelon form of A is :" << endl;
+REF(A).printMatrix(9,4);
+
+cout << "reduced row echelon form of A is :" << endl;
+RREF(A).printMatrix(9,4);
+
+(A*INV(A)).printMatrix(2,1);
+(INV(A)*A).printMatrix(2,1);
+
+*/  //test program
+/*double data_array[6][6] = {
+{ 1,  2,  3,  4,  5,  6 },
+{ 0,  1,  4,  7, 10, 13 },
+{ 2,  0,  1,  3,  5,  7 },
+{ 1,  1,  0,  2,  4,  6 },
+{ 3,  5,  2,  1,  0,  8 },
+{ 4,  2,  1,  0,  3,  9 }
+};*/
