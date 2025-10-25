@@ -43,7 +43,7 @@ class Matrix {
         COF.vector = new T[COF.rows*COF.cols];
         for(size_t i = 0; i < COF.rows ; i++ ){
             for(size_t j = 0; j < COF.cols ; j++){
-                COF.vector[i*COF.cols + j] = pow(-1,i+j)*DETl(minorMatrix(matrix,i,j)); 
+                COF.vector[i*COF.cols + j] = pow(-1,i+j)*DET(minorMatrix(matrix,i,j)); 
             }
         }
         return COF;
@@ -332,7 +332,7 @@ class Matrix {
     
     /////////////////////////////////////////////////////////////////////////////////////////////// ROW ECHELON FORM
     
-    friend Matrix REF(const Matrix& M){        //non normalized pivots,   // row echelon form  //testert
+    friend Matrix REF(const Matrix& M){        //normalized pivots,   // row echelon form  //testert
         if(M.vector == nullptr) {
             cout << "Cannot find row echelon form of a null matrix " << endl;
             Matrix nullmatrix;
@@ -350,26 +350,25 @@ class Matrix {
             /////////////vector[i*n + j] = RE[i][j]
             while((cR < m)&&(cC < n)){
                 pivot = 0; f = 0;
-                for(size_t i = cR; i < m ; i++){ // search for the first nontol entry in the current column , starting from first row
-                    if((abs(RE.vector[i*n + cC]) > tol)&&(f < 1)){    //(RE.vector[i*n + cC] != tol)
+                for(size_t i = cR; i < m ; i++){ // search for the first nonzero entry in the current column , starting from current row
+                    if((abs(RE.vector[i*n + cC]) > tol)&&(f < 1)){    //(RE.vector[i*n + cC] != 0)
                         pivot = i ; f = 1;
                     }
                 }
                 if(f == 1){   //means we found a pivot
-                    if(pivot != cR){ RE = rSwapH(RE,cR,pivot);} // raise the pivot to the current row
+                    if(pivot != cR){ RE = rSwapH(RE,cR,pivot);} // raise the pivot to the current row   Rpiovt <-----> Rcr
                     if((abs(RE.vector[cR*n + cC]) > tol)&&(RE.vector[cR*n + cC] != 1)){    //RE.vector[cR*n + cC] != tol
                         RE = rScaleH(RE,cR,1/(RE.vector[cR*n + cC])); // if its not 0 or 1 , normalize the pivot (that we have raised to the current row)
-                    }
+                    }  // Rcr ----> 1/(RE[cR][cC]) * Rcr
                     for(size_t i = cR + 1; i < m ; i++){   //elemenating below the pivot (only executes if cR >= m -2)
-                        RE = rAddH(RE,i,cR,-RE.vector[i*n + cC]);
+                        RE = rAddH(RE,i,cR,-RE.vector[i*n + cC]);  // Ri ---> Ri - RE[i][cC]* Rcr
                         // RE.vector[i*n + cC] = T{}; makes sure below the pivot is tol
                     }
                     cR++ ; cC++; //go to create the next pivot
-                    // RE.printMatrix(3,3); for debuggign purposes
-                    cout << endl;
+                    
                 } else { /// skip to the next column since no pivots where found
                     if(cC < n){ 
-                        cC++ ; // so that we dont exceed the matrix bounds if the last column is a tol column
+                        cC++ ; // so that we dont exceed the matrix bounds if the last column is a zero column
                     }
                 }
             }
@@ -520,7 +519,7 @@ class Matrix {
                             RE = rAddH(RE,i,cR,-RE.vector[i*n + cC]);
                         }
                         cR++ ; cC++;  
-                        cout << endl;
+                        
                     } else { 
                         if(cC < n){ 
                             cC++ ; 
@@ -602,7 +601,7 @@ class Matrix {
     } 
     
     
-    /////////////////////////// elementary column operations //////////////////  must be maid avaible to the user
+    /////////////////////////// elementary column operations //////////////////  must be maid avaible to the user (add bounds checking)
     
     /*  ///1 - elementary column operations, ( you must remove H and make just one version)
     friend Matrix cSwapH(const Matrix& matrix, size_t c1 , size_t c2  ){ // no need to check if i,j are inbound or if matrix is null
@@ -661,7 +660,7 @@ class Matrix {
         }
     }
     
-    //the problem was a pivot ,"1" sometimes isnt exactry 1 even though it was printed as 1, because 62.02565 - 61.02565 doesnt always yield the exact 1 but 0.999999999--->19 toles
+    //the problem was a pivot ,"1" sometimes isnt exactlzzzzzfzy 1 even though it was printed as 1, because 62.02565 - 61.02565 doesnt always yield the exact 1 but 0.999999999--->19 toles
     
     
     /////////////////////////////////////////////// setters and getters //////////////////////////////
@@ -960,7 +959,7 @@ class Matrix {
                             } 
                         }     
                         if(f == 1){ // found a pivot
-                            isFree[c_index] = false; //is found a pivot, then its colmun index is not that of a free variable
+                            isFree[c_index] = false; //if found a pivot, then its colmun index is not that of a free variable
                         } 
                     }
                     
@@ -1010,7 +1009,7 @@ class Matrix {
         
     }
 };
-
+//just an example to use the custom filler funtion
 void filler(Matrix<double>* A){
     
     size_t m = A->rowNbr(); size_t n = A->colNbr(); 
@@ -1028,55 +1027,6 @@ void filler(Matrix<double>* A){
 
 
 int main(){  
-    /// SOLVING SYSTMES OF LINEAR EQUATIONS DEMO
-    // 8x8 coefficient matrix
-long double O[8][8] = {
-    {1, 2, 3, 4, 5, 6, 7, 8},
-    {2, 4, 6, 8,10,12,14,16},
-    {1, 1, 0, 1, 0, 2, 0, 3},
-    {2, 2, 0, 2, 0, 4, 0, 6},
-    {3, 1, 1, 0, 0, 1, 2, 0},
-    {6, 2, 2, 0, 0, 2, 4, 0},
-    {1, 0, 1, 2, 3, 0, 0, 1},
-    {2, 0, 2, 4, 6, 0, 0, 2}
-};
-
-// 8x1 right-hand side vector
-long double p[8][1] = {
-    {10},
-    {20},   // = 2 * row 1
-    {5},
-    {10},   // = 2 * row 3
-    {7},
-    {14},   // = 2 * row 5
-    {8},
-    {16}    // = 2 * row 7
-};
-    Matrix<long double> A,b;
-    A.fillMatrixA(O);
-    b.fillMatrixA(p);
-    
-    Matrix<long double>::Solution_Struct SystemSol = Solve(A,b);  //the user defined type "Solution_Struct" must be qualified, means we must tell the compiler using the scope resolution specifier that the definition of this type is found in the matrix<long double> class, as each time you use the template class with a different datatype , the compiler creates a completely new version but with T replaced with long double
-    if(SystemSol.hasSolutions){
-        if(SystemSol.isUnique){   //when the solution exists and is unique
-            (SystemSol.X).printMatrix(20,19); 
-        } else {    //when there exists an infinity of solutions
-            
-            cout << "a particular solution is :" << endl;
-            (SystemSol.Xp).printMatrix(20,19); 
-            cout << "a basis for the nullspace is :" << endl;
-            (SystemSol.N_A).printMatrix(8,4); 
-            long double c1 = 4.0 , c2 = 100 , c3 = 40.7 , c4 = -125.0;
-            Matrix<long double> Xh = c1*SystemSol.N_A.getCol(0) + c2*SystemSol.N_A.getCol(1) +  c3*SystemSol.N_A.getCol(2) + c4*SystemSol.N_A.getCol(3) ;
-            Matrix<long double> X = SystemSol.Xp + Xh;
-            (A*X).printMatrix(); //test if the new solution is correct
-            //cout << RANK(SystemSol.N_A);
-            
-        }
-    }else {  //when there are no solutions
-        (SystemSol.Xp).printMatrix(20,19); 
-    }
-    
     
     return 0; 
 }   
@@ -1085,7 +1035,8 @@ long double p[8][1] = {
 // and then systems of linear equations,eigen vectors and eigen values , polynomial class
 
 
-/* //MATRIX-VECTOR MULTIPLICATION DEMO
+/* 
+//MATRIX-VECTOR MULTIPLICATION DEMO
 Matrix<double> A(4,3);
 Matrix<double> x(3,1);
 Matrix<double> b;
@@ -1093,17 +1044,19 @@ cout << "enter the matrix A" << endl;
 A.fillMatrixUI();
 cout << "enter the vector b" << endl;
 x.fillMatrixUI();
-
 cout << "The matrix A is :" <<endl ;
 A.printMatrix();
 cout << " the vector x is :" << endl;
 x.printMatrix();
 b = A*x;
 cout << "the result Ax = b is :" << endl;
-b.printMatrix();*/
+b.printMatrix();
+*/
 
-//OPERATIONS ON MATRICES DEMO
+
 /*
+//OPERATIONS ON MATRICES DEMO
+
 Matrix<long double> A;
 long double m[15][15] = {
 {  3, -7,  12,  0, -5,  9,  8,  2, -11, 14,  1, -6,  4, 10, -3},
@@ -1122,6 +1075,7 @@ long double m[15][15] = {
 { -6,  4,  1, -8,  11,  7, -2, 13,  0, -10,  12, -9,  5, -14,  3},
 {  0,  15, -13,  6, -2,  8, -11,  4,  9, -7,  3, -12,  10,  1, -5}
 };
+
 A.fillMatrixA(m);
 cout << "the matrix A is :"<< endl;
 A.printMatrix(9,4);
@@ -1142,76 +1096,103 @@ REF(A).printMatrix(9,4);
 cout << "reduced row echelon form of A is :" << endl;
 RREF(A).printMatrix(9,4);
 
-//cout << "the cofactor matrix of A is :"<< endl;
-//COF(A).printMatrix(9,4);
+cout << "the cofactor matrix of A is :"<< endl;
+COF(A).printMatrix(10,3);
 
-//cout << "the adjoint matrix of A is :" << endl;
-//ADJ(A).printMatrix(9,4);
+cout << "the adjoint matrix of A is :" << endl;
+ADJ(A).printMatrix(10,3);
 
-(A*INV(A)).printMatrix(2,1);
-(INV(A)*A).printMatrix(2,1);
-
+// (A*INV(A)).printMatrix(2,1);
+// (INV(A)*A).printMatrix(2,1);
 */ 
 
 
-/* //DIAGNOLIZATION DEMO
+/* 
+//DIAGNOLIZATION DEMO
 Matrix<double> A(3,3),P(3,3);
 A.fillMatrixUI();
 P.fillMatrixUI();
-(INV(P)*A*P).printMatrix(8,4);*/
-
-
-
-
-
+(INV(P)*A*P).printMatrix(8,4);
+*/
 
 
 /*
-  /// SOLVING SYSTMES OF LINEAR EQUATIONS DEMO
-    long double O[8][8] = {
-        {1,  2,  0,  1,  0,  3,  2,  0},
-        {2,  4,  0,  2,  0,  6,  4,  0},   // 2 * row1
-        {0,  0,  1,  2,  1,  0,  1,  3},
-        {0,  0,  2,  4,  2,  0,  2,  6},   // 2 * row3
-        {1,  1,  1,  0,  2,  1,  3,  1},
-        {2,  2,  2,  0,  4,  2,  6,  2},   // 2 * row5
-        {0,  0,  0,  0,  1,  1,  0,  1},
-        {0,  0,  0,  0,  2,  2,  0,  2}    // 2 * row7
-    };
-    long double p[8][1] = {
-        {3},
-        {6},   // 2 * row1's RHS
-        {5},
-        {10},  // 2 * row3's RHS
-        {4},
-        {8},   // 2 * row5's RHS
-        {2},
-        {4}    // 2 * row7's RHS
-    };
-    Matrix<long double> A,b;
-    A.fillMatrixA(O);
-    b.fillMatrixA(p);
-    
-    Matrix<long double>::Solution_Struct SystemSol = Solve(A,b);  //the user defined type "Solution_Struct" must be qualified, means we must tell the compiler using the scope resolution specifier that the definition of this type is found in the matrix<long double> class, as each time you use the template class with a different datatype , the compiler creates a completely new version but with T replaced with long double
-    if(SystemSol.hasSolutions){
-        if(SystemSol.isUnique){   //when the solution exists and is unique
-            (SystemSol.X).printMatrix(20,19); 
-        } else {    //when there exists an infinity of solutions
-            
-            cout << "a particular solution is :" << endl;
-            (SystemSol.Xp).printMatrix(20,19); 
-            cout << "a basis for the nullspace is :" << endl;
-            (SystemSol.N_A).printMatrix(8,4); 
-            long double c1 = 4.0 , c2 = 100 , c3 = 40.7 , c4 = -125.0;
-            Matrix<long double> Xh = c1*SystemSol.N_A.getCol(0) + c2*SystemSol.N_A.getCol(1) +  c3*SystemSol.N_A.getCol(2) + c4*SystemSol.N_A.getCol(3) ;
-            Matrix<long double> X = SystemSol.Xp + Xh;
-            (A*X).printMatrix(); //test if the new solution is correct
-            //cout << RANK(SystemSol.N_A);
-            
-        }
-    }else {  //when there are no solutions
-        (SystemSol.Xp).printMatrix(20,19); 
-    }
-    
+// SOLVING SYSTMES OF LINEAR EQUATIONS DEMO
+long double O[8][8] = {
+{1,  2,  0,  1,  0,  3,  2,  0},
+{2,  4,  0,  2,  0,  6,  4,  0},  
+{0,  0,  1,  2,  1,  0,  1,  3},
+{0,  0,  2,  4,  2,  0,  2,  6},   
+{1,  1,  1,  0,  2,  1,  3,  1},
+{2,  2,  2,  0,  4,  2,  6,  2},   
+{0,  0,  0,  0,  1,  1,  0,  1},
+{0,  0,  0,  0,  2,  2,  0,  2}   
+};
+long double p[8][1] = {
+{3},
+{6},  
+{5},
+{10},  
+{4},
+{8},   
+{2},
+{4}  
+};
+Matrix<long double> A,b;
+A.fillMatrixA(O);
+b.fillMatrixA(p);
 
+Matrix<long double>::Solution_Struct SystemSol = Solve(A,b);  //the user defined type "Solution_Struct" must be qualified, means we must tell the compiler using the scope resolution specifier that the definition of this type is found in the matrix<long double> class, as each time you use the template class with a different datatype , the compiler creates a completely new version but with T replaced with long double
+if(SystemSol.hasSolutions){
+if(SystemSol.isUnique){   //when the solution exists and is unique
+(SystemSol.X).printMatrix(20,19); 
+} else {    //when there exists an infinity of solutions
+
+cout << "a particular solution is :" << endl;
+(SystemSol.Xp).printMatrix(20,19); 
+cout << "a basis for the nullspace is :" << endl;
+(SystemSol.N_A).printMatrix(8,4); // if we have k vectors that belong to N(A), and they are linearly indep, then if k = nullity then they are a valid basis
+long double c1 = 4.0 , c2 = 100 , c3 = 40.7 , c4 = -125.0;
+Matrix<long double> Xh = c1*SystemSol.N_A.getCol(0) + c2*SystemSol.N_A.getCol(1) +  c3*SystemSol.N_A.getCol(2)  ;
+Matrix<long double> X = SystemSol.Xp + Xh;
+(A*X).printMatrix(); //test if the new solution is correct
+}
+}else {  //when there are no solutions
+(SystemSol.Xp).printMatrix(20,19); 
+}
+
+*/
+
+
+/* 
+// SOLVING SYSTMES OF LINEAR EQUATIONS (USER INPUT)
+Matrix<double> A(3,4),b(3,1);
+cout << "enter the coefficient matrix" << endl;
+A.fillMatrixUI();
+cout << "enter values of b" << endl;
+b.fillMatrixUI();
+
+Matrix<double>::Solution_Struct SystemSol = Solve(A,b);  //the user defined type "Solution_Struct" must be qualified, means we must tell the compiler using the scope resolution specifier that the definition of this type is found in the matrix<long double> class, as each time you use the template class with a different datatype , the compiler creates a completely new version but with T replaced with long double
+if(SystemSol.hasSolutions){
+if(SystemSol.isUnique){   //when the solution exists and is unique
+(SystemSol.X).printMatrix(8,4); 
+} else {    //when there exists an infinity of solutions
+
+cout << "a particular solution is :" << endl;
+(SystemSol.Xp).printMatrix(8,4); 
+cout << "a basis for the nullspace is :" << endl;
+(SystemSol.N_A).printMatrix(8,4); 
+double c1 = 4.0 , c2 = 100 , c3 = 40.7 , c4 = -125.0;
+Matrix<double> Xh = c1*SystemSol.N_A.getCol(0) + c2*SystemSol.N_A.getCol(1) ;
+Matrix<double> X = SystemSol.Xp + Xh;
+cout << "an other solution is " << endl;
+X.printMatrix(8,4);
+cout << " A*X "<<endl;
+(A*SystemSol.X).printMatrix(8,4); //test if the new solution is correct
+
+
+}
+}else {  //when there are no solutions
+(SystemSol.Xp).printMatrix(20,19); 
+}
 */
